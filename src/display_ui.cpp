@@ -28,14 +28,14 @@ void init_touch_test_ui() {
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
   state_label = lv_label_create(screen);
-  lv_obj_align(state_label, LV_ALIGN_TOP_MID, 0, 40);
+  lv_obj_align(state_label, LV_ALIGN_CENTER, 0, -30);
 
   coord_label = lv_label_create(screen);
-  lv_obj_align(coord_label, LV_ALIGN_TOP_MID, 0, 60);
+  lv_obj_align(coord_label, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t *hint = lv_label_create(screen);
   lv_label_set_text(hint, "Raw CHSC6X read + LVGL render.");
-  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 90);
+  lv_obj_align(hint, LV_ALIGN_CENTER, 0, 30);
 
   touch_dot = lv_obj_create(screen);
   lv_obj_set_size(touch_dot, 12, 12);
