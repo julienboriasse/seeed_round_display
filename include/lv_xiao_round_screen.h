@@ -9,8 +9,8 @@
 #define SCREEN_HEIGHT 240
 #define LVGL_BUFF_SIZE 10 // Number of rows
 
-#define CHSC6X_I2C_ID 0x51          // Detected on XIAO ESP32S3 round screen
-#define CHSC6X_I2C_FALLBACK_ID 0x2e // Library default
+#define CHSC6X_I2C_ID 0x2e          // Detected on XIAO ESP32S3 round screen
+#define CHSC6X_I2C_FALLBACK_ID 0x2e // Legacy address seen on some modules
 #define CHSC6X_MAX_POINTS_NUM 1
 #define CHSC6X_READ_POINT_LEN 5
 #define TOUCH_INT D7
@@ -150,26 +150,47 @@ static void chsc6x_convert_xy(uint8_t *x, uint8_t *y)
     }
 }
 
-static void chsc6x_get_xy(lv_coord_t * x, lv_coord_t * y)
+static bool chsc6x_read_packet(uint8_t addr, uint8_t *buf, size_t len)
 {
-    uint8_t temp[CHSC6X_READ_POINT_LEN] = {0};
-    uint8_t read_len = Wire.requestFrom(CHSC6X_I2C_ID, CHSC6X_READ_POINT_LEN);
+    Wire.beginTransmission(addr);
+    Wire.write((uint8_t)0x00); // reset register pointer
+    uint8_t tx_err = Wire.endTransmission(false);
+    if (tx_err != 0) {
+        Serial.printf("[touch] I2C addr=0x%02X set-pointer err=%u\n", addr, tx_err);
+        return false;
+    }
+
+    uint8_t got = Wire.requestFrom(addr, (uint8_t)len);
+    if (got != len) {
+        Serial.printf("[touch] I2C addr=0x%02X read %u/%u bytes\n", addr, got, (uint8_t)len);
+        return false;
+    }
+
+    Wire.readBytes(buf, len);
+    return true;
+}
+
+static bool chsc6x_get_xy(lv_coord_t * x, lv_coord_t * y)
+{
+    uint8_t packet[CHSC6X_READ_POINT_LEN] = {0};
     uint8_t addr_used = CHSC6X_I2C_ID;
+    bool ok = chsc6x_read_packet(addr_used, packet, sizeof(packet));
 
-    if (read_len != CHSC6X_READ_POINT_LEN && CHSC6X_I2C_FALLBACK_ID != CHSC6X_I2C_ID) {
-        read_len = Wire.requestFrom(CHSC6X_I2C_FALLBACK_ID, CHSC6X_READ_POINT_LEN);
+    if (!ok && CHSC6X_I2C_FALLBACK_ID != CHSC6X_I2C_ID) {
         addr_used = CHSC6X_I2C_FALLBACK_ID;
+        ok = chsc6x_read_packet(addr_used, packet, sizeof(packet));
     }
 
-    if(read_len == CHSC6X_READ_POINT_LEN){
-        Wire.readBytes(temp, read_len);
-        if (temp[0] == 0x01) {
-        chsc6x_convert_xy(&temp[2], &temp[4]);
-        *x = temp[2];
-        *y = temp[4];
-        Serial.printf("[touch] read ok addr=0x%02X X=%d Y=%d\n", addr_used, *x, *y);
-        }
+    if (!ok || packet[0] != 0x01) {
+        return false;
     }
+
+    chsc6x_convert_xy(&packet[2], &packet[4]);
+    *x = packet[2];
+    *y = packet[4];
+    Serial.printf("[touch] Raw addr=0x%02X: %02x %02x %02x %02x %02x -> X=%d Y=%d\n",
+                  addr_used, packet[0], packet[1], packet[2], packet[3], packet[4], *x, *y);
+    return true;
 }
 
 #if LVGL_VERSION_MAJOR == 9
@@ -179,16 +200,15 @@ static void chsc6x_read( lv_indev_drv_t * indev_driver, lv_indev_data_t * data )
 #endif
 {
     lv_coord_t touchX, touchY;
-    if( !chsc6x_is_pressed() )
+    if( !chsc6x_is_pressed() || !chsc6x_get_xy(&touchX, &touchY))
     {
         data->state = LV_INDEV_STATE_REL;
-    } else {
-        data->state = LV_INDEV_STATE_PR;
-        chsc6x_get_xy(&touchX, &touchY);
-        /*Set the coordinates*/
-        data->point.x = touchX;
-        data->point.y = touchY;
+        return;
     }
+
+    data->state = LV_INDEV_STATE_PR;
+    data->point.x = touchX;
+    data->point.y = touchY;
 }
 
 static void lv_xiao_touch_init(void)
