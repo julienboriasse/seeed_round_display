@@ -6,6 +6,8 @@
 #include <lvgl.h>
 #include "lv_xiao_round_screen.h"
 
+uint8_t screen_rotation = 0;
+
 static lv_obj_t *coord_label = nullptr;
 static lv_obj_t *state_label = nullptr;
 static lv_obj_t *touch_dot = nullptr;
