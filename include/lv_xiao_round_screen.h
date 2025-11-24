@@ -1,4 +1,5 @@
 /* display and touch driver for XIAO round screen (local override) */
+#pragma once
 
 #include <Arduino.h>
 #include <lvgl.h>
